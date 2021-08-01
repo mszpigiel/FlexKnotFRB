@@ -1,5 +1,7 @@
 # FlexKnotFRB
 
+These are the codes used for our paper "What it takes to measure reionization with fast radio bursts". If you would like to use any of these methods please feel free to contact me for more details and explanations, my email address can be found [here](https://www.ast.cam.ac.uk/people/Stefan.Heimersheim) or you can just open an issue on here GitHub :)
+
 ## Generation of the synthetic data set
 The codes A and B are responsible for generating the data sets. As we are
 using the star formation rate from Behroozi et al 2019, and the ionization
@@ -34,3 +36,6 @@ The example python line will take the 100 FRB data set, and run a
 Nested Samplung run with 3 FlexKnots (Start point, end point and one
 fully movable point) and vary Omega_m and Omega_b_over_h within priors
 approximately (i.e. assuming no correlation) corresponding to Planck limits.
+
+## Analysing the Nested Samplung runs and generating posterior constraints
+This will be added shortly
