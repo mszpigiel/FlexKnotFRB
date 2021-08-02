@@ -1,0 +1,21 @@
+# This reionization history is obtained from the simulation by
+# Kulkarni et al. 2019, https://ui.adsabs.harvard.edu/abs/2019MNRAS.485L..24K/abstract
+# REDSHIFT | MASS-AVERAGED IONIZED FRACTION | VOLUME-AVERAGED IONIZED FRACTION
+5.000    1.000    1.000
+5.110    1.000    1.000
+5.257    1.000    1.000
+5.413    0.996    0.995
+5.579    0.983    0.976
+5.756    0.950    0.932
+5.946    0.902    0.869
+6.149    0.843    0.795
+6.368    0.775    0.713
+6.604    0.701    0.628
+6.860    0.625    0.543
+7.139    0.547    0.461
+7.444    0.471    0.384 
+7.780    0.396    0.313
+8.150    0.327    0.250
+8.562    0.262    0.195
+9.024    0.205    0.149
+9.546    0.155    0.110
