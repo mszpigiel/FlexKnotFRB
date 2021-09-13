@@ -237,6 +237,9 @@ class _frb_(_base_):
 	def xifunc_Planck(self, zreio1=7.82, dz=0.5):
 		return lambda z: self.tanh_step(z, zreio1, dz=dz)
 
+	def xeHeII_Planck(self, z, zreio2=3.5, dz=0.5):
+		return self.He_to_H_number_ratio*self.tanh_step(z, zreio2, dz=dz)
+
 	def optical_depth_of_xe(self, xe_func, zlow=0, zhigh=50, epsrel=1e-5, epsabs=0, debug=False, integrate_mode=None):
 		prefactor = self.n_H(0)*aco.c*aco.sigma_T*aun.Gyr
 		f = lambda z: xe_func(z)*(1+z)**2/self.toVal(self.H(z), aun.Gyr**-1)
