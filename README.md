@@ -6,7 +6,7 @@ These are the codes used for our paper "What it takes to measure reionization wi
 The codes `A_create_perfect_data.py` and `B_generate_synthetic_observations.py`
 are responsible for generating the synthetic data sets. The former computes
 the mean (homogeneous) expectation, and the latter adds errors and uncertainties.
-The star formation rate is obtained from [Behroozi et al 2019](https://ui.adsabs.harvard.edu/abs/2019MNRAS.488.3143B/abstract) (the file is `umachine-dr1/data/csfrs/csfrs.dat` from [DR1](https://www.peterbehroozi.com/data.html), [direct link](https://slac.stanford.edu/~behroozi/UniverseMachine/umachine-dr1.tar.gz)), and
+The star formation rate is obtained from [Behroozi et al. 2019](https://ui.adsabs.harvard.edu/abs/2019MNRAS.488.3143B/abstract) (the file is `umachine-dr1/data/csfrs/csfrs.dat` from [UniverseMachine DR1](https://www.peterbehroozi.com/data.html), [direct link](https://slac.stanford.edu/~behroozi/UniverseMachine/umachine-dr1.tar.gz)), and
 the ionization history from [Kulkarni et al. 2019](https://ui.adsabs.harvard.edu/abs/2019MNRAS.485L..24K/exportcitation),
 both files are included in the repository.
 ```bash
