@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this please cite the paper (arxiv/2107.14242), and this code/data as below."
+authors:
+- family-names: "Heimersheim"
+  given-names: "Stefan"
+  orcid: "https://orcid.org/0000-0001-9631-4212"
+- family-names: "Sartorio"
+  given-names: "Nina S."
+  orcid: "https://orcid.org/0000-0003-2138-5192"
+- family-names: "Fialkov"
+  given-names: "Anastasia"
+  orcid: "https://orcid.org/0000-0002-1369-633X"
+- family-names: "Lorimer"
+  given-names: " Duncan R."
+  orcid: "https://orcid.org/0000-0003-1301-966X"
+title: 'Data and Code for "What it Takes to Measure Reionization with Fast Radio Bursts"'
+version: 1.0.0
+doi: 10.5281/zenodo.5504051
+date-released: 2021-09-14
+url: "https://github.com/Stefan-Heimersheim/FlexKnotFRB"
