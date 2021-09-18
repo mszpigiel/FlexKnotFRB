@@ -878,7 +878,8 @@ def makeXiPlot(posteriorSims=None, posteriorSims_logZs=None, priorSims=None,
     midpointSimsDict=None, filename="paper_plots/E_"+outfilename+"_xiplot.pdf",
     histogram = False):
 
-    fig, ax_fgivenx = plt.subplots(figsize=(10, 4))
+    fig, ax_fgivenx = plt.subplots(figsize=(13, 4))
+    plt.grid(ls='dotted')
     assert posteriorSims is not None, "Please pass posteriorSims"
     assert posteriorSims_logZs is not None, "Please pass posteriorSims_logZs"
     plotPrior = True if priorSims is not None else False
@@ -886,7 +887,7 @@ def makeXiPlot(posteriorSims=None, posteriorSims_logZs=None, priorSims=None,
     lenstr = str(np.sum([len(posteriorSims[i]) for i in range(len(posteriorSims))]))
 
     if plotPrior:
-        multiXiPlot(priorSims, logEvidences="1", contour_line_levels=[1,2],
+        cbar_prior = multiXiPlot(priorSims, logEvidences="1", contour_line_levels=[1,2],
             ax=ax_fgivenx, alpha=1, rasterize_contours=True, fineness=0.25,
             colors=plt.cm.Purples_r,
             cache="cache/fgivenx_prior_"+lenstr+outfilename+"_/",
@@ -900,22 +901,20 @@ def makeXiPlot(posteriorSims=None, posteriorSims_logZs=None, priorSims=None,
 
     # Plot Kulkarni et al. and see if we do recover it
     f = ax_fgivenx.plot(np.linspace(5,15,1000), xi_phys(np.linspace(5,15,1000)), label='Fiducial', color="darkturquoise", linestyle='dashed', lw=2, alpha=1)
-
-    colorbar = plt.colorbar(cbar, ticks=[0,1,2], label='Confidence level')
+    colorbar = fig.colorbar(cbar, ticks=[0,1,2], label='Confidence level', pad=0)
+    colorbar.set_label("Confidence level", labelpad=0.01)
     colorbar.set_ticklabels(["0", r"68\%", r"95\%"])
     ax_fgivenx.set_xlim(5,30)
     ax_fgivenx.set_xlabel("Redshift $z$")
     ax_fgivenx.set_ylabel("Ionized fraction $x_i$")
     orange_patch = mpatches.Patch(color=colorbar.cmap(0.5), label='Posterior')
     purple_patch = mpatches.Patch(color=plt.cm.Purples_r(0.5), label='Prior')
-
     if midpointSimsDict is not None:
         xi = [0.1, 0.5, 0.9]
         means = []
         xerr1 = []
         xerr2 = []
         for key in ["z_at_xi0.1", "z_at_xi0.5", "z_at_xi0.9"]:
-            print(key)
             midpointSims = midpointSimsDict["rwMergedChain_"+key]
             means.append(midpointSims[key].mean())
             xerr1.append(np.abs(fastCL(midpointSims, key=key, level=0.68)-means[-1]))
@@ -926,23 +925,46 @@ def makeXiPlot(posteriorSims=None, posteriorSims_logZs=None, priorSims=None,
         ax_fgivenx.errorbar(means, xi, xerr=xerr1.T, **planckstyle, label=r"68\% C.L.", zorder=10)
         planckstyle.update({"ecolor":'blue'})
         ax_fgivenx.errorbar(means, xi, xerr=xerr2.T, **planckstyle, label=r"95\% C.L.")
-        print(np.shape(xerr2))
 
     handles, labels = ax_fgivenx.get_legend_handles_labels()
+    axbox = ax_fgivenx.get_position()
+    x_value=0.515; y_value=0.5
+    loc = (0.57,0.65)
     if plotPrior:
-        plt.legend(handles=[*handles, orange_patch, purple_patch])
+        plt.legend(handles=[orange_patch, purple_patch, *handles], labels=["Posterior", "Prior", *labels])
     else:
-        plt.legend(handles=[*handles, orange_patch])
-
+        plt.legend(handles=[orange_patch, *handles], labels=["Posterior", *labels])
     plt.tight_layout()
-    plt.grid(ls='dotted')
-    plt.savefig(filename)
+    if plotPrior:
+        colorbar_prior = fig.colorbar(cbar_prior, ticks=[])
+
+    # Sorry for this messy part, it just sets the position of the colorbar.
+    # Just didn't want to touch it anymore after it worked.
+    loc = deepcopy(colorbar.ax.get_position())
+    loc.x0 -= 0.1
+    loc.x1 -= 0.1
+    colorbar.ax.set_position(deepcopy(loc))
+    loc.x0 += 0.022
+    loc.x1 += 0.022
+    colorbar_prior.ax.set_position(loc)
+    pos=colorbar.ax.get_position()
+    pos.x0 = 0.7245576780301003
+    pos.x1 = 0.7404006154281132
+    colorbar.ax.set_position(deepcopy(pos))
+    pos.x1 -= 0.02
+    pos.x0 -= 0.02
+    colorbar_prior.ax.set_position(pos)
+
+    plt.savefig(filename, bbox_inches='tight')
+    return fig, colorbar, colorbar_prior
+
 
 if not skipFigure1:
     makeXiPlot(posteriorSims=simsDict['chains'],
         posteriorSims_logZs=list(simsDict['logZs']['logZ']),
         priorSims=priorChains,
         midpointSimsDict = simsDict, histogram=False)
+
 
 
 print("=========== Figure 2 ===========")
