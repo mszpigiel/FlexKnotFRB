@@ -161,7 +161,7 @@ class _data_(_base_):
 		self.data_extended = False
 
 		# From Behroozi et al, https://arxiv.org/abs/1806.07893
-		self.behroozi_csfrs = np.genfromtxt("Behroozi2019_csfrs.dat").T
+		self.behroozi_csfrs = np.genfromtxt("behroozi_et_al_2019_csfrs.dat").T
 		self.behroozi_a = self.behroozi_csfrs[0]
 		self.behroozi_z = self.z_of_a(self.behroozi_a)
 		self.behroozi_log10CSFRD = np.log10(self.behroozi_csfrs[7])
