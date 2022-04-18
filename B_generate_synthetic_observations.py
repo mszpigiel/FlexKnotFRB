@@ -13,11 +13,19 @@ normalizations = [100, 1000, 10000]
 #  FRB source distribution scaling with Star Formation Rate
 #  (also implemented uniform distribution and z*exp(-z) exponential distribution)
 cases = ['sfr']
+models = ['phys']
 #  Seeds: Make sure to have a different seed for every new combination,
 #         but make sure than the 1,000 FRB data set includes the 100
-#         FRB data set, i.e. same seed there.
-seed_case = {'exp': 1, 'sfr': 2, 'uni': 3}
-models = {'phys': 20}  # {'tanh':10, 'phys':20}
+#         FRB data set, i.e. want to use the same seed there.
+#  Additional runs with new seed:
+#  (1) new DM values, same redshift (add_seed=1)
+#  (2) new z values (B), and new DM values (add_seed=2)
+#  (3) new z values (C), and new DM values (add_seed=3)
+add_seed = 0 # add to regenerate DM data
+data_samples = "samplesA"
+seed_case = {'sfr': 2} # {'exp': 1, 'sfr': 2, 'uni': 3}
+seed_models = {'phys': 20}  # {'tanh':10, 'phys':20}
+
 # Scale the redshift and observational uncertainties.
 #  Redshift is relative error
 redshift_error_configs = [0.1]  # [0, 0.01, 0.1, 0.2]
@@ -70,13 +78,13 @@ for model in models:
     for norm in normalizations:
         for case in cases:
             # Load data from previous code
-            filename_in = model+"_samples_"+case+"_norm"+str(norm)+'.npy'
+            filename_in = model + "_" + data_samples + "_" + case + '_norm' + str(norm) + '.npy'
             DM_measurements = np.load(datafolder+filename_in, allow_pickle=True)
             # Iterate through error configurations
             for obserror_factor in observation_error_configs:
                 assert obserror_factor==1, "Currently only observation_error_configs == 1 supported in likelihood"
                 for z_error_relative in redshift_error_configs:
-                    filename_out = 'Mockdata_'+model+'_{0:}_z{1:.0f}%_norm{2:}_obs{3:}.npy'.format(case, z_error_relative*100, norm, obserror_factor)
+                    filename_out = 'Mockdata_'+model+'_seed'+str(add_seed)+'_{0:}_z{1:.0f}%_norm{2:}_obs{3:}.npy'.format(case, z_error_relative*100, norm, obserror_factor)
                     output_dict = {'z_true':[], 'DM_meancosmo':[],
                                    'z_obs':[], 'DM_obs':[], 'DM_err':[],
                                    'settings': {}}
@@ -84,7 +92,7 @@ for model in models:
 
                     # Use this to only create new seeds for a new distributions and mode,
                     # keep same seed if just increasing data set size
-                    seed = seed_case[case]+models[model]
+                    seed = seed_case[case]+seed_models[model]+add_seed
                     np.random.seed(seed)
                     # Return IGM scatter DM uncertainty as a function of redshift
                     sigma_DM_IGM_func = C.sigma_DM_IGM_function(xi_func=xi_phys)
@@ -130,8 +138,10 @@ for model in models:
 
 
 
+# Some plots to illustrate (i) steps how the data is generate, and (ii) the final sample of synthetic data
 
 def plot_data_generation(d):
+    plt.figure()
     plt.plot(d["z_true"], d['DM_meancosmo']+DM_nonCosmo, label='Modelled true DM and z', marker='o', color='green')
     plt.scatter(d["z_obs"], d['DM_obs'], marker='o', label='Observed data', color='orange')
     for i in range(len(d['z_true'])):
@@ -139,18 +149,48 @@ def plot_data_generation(d):
     plt.legend(loc='lower right')
     plt.xlabel('Redshift $z$')
     plt.ylabel('Dispersion measure DM [pc/cm3]')
-    plt.show()
 
 def plot_errorbars(d):
+    plt.figure()
     style = {"fmt":'o', "markersize":4, "markerfacecolor":'orange', "markeredgecolor":'black'}
     plt.errorbar(d["z_obs"], d['DM_obs'], yerr=d['DM_err'], xerr=0.1*d["z_true"], **style, label='Synthetic data')
     plt.plot(d["z_true"], d['DM_meancosmo']+DM_nonCosmo, label=r'True $\overline{DM}(z)$', color='green')
     plt.legend(loc='lower right')
     plt.xlabel('Redshift $z$')
     plt.ylabel(r'Dispersion measure DM $[\mathrm{pc\,cm^{-3}}]$')
-    plt.show()
 
-d = np.load(datafolder+"Mockdata_phys_sfr_z10%_norm100_obs1.npy", allow_pickle=True).item()
+filename_plot = 'Mockdata_'+model+'_seed'+str(add_seed)+'_{0:}_z{1:.0f}%_norm{2:}_obs{3:}.npy'.format("sfr", 0.1*100, 100, 1)
+d = np.load(datafolder+filename_plot, allow_pickle=True).item()
 
 plot_data_generation(d)
+plt.savefig("extra_plots/B_data_generation.pdf")
 plot_errorbars(d)
+plt.savefig("extra_plots/B_errorbars.pdf")
+plt.show()
+
+
+# Double check that files which should be identical indeed are identical
+# (just use a single number to check the random seeds are right)
+
+print("Check for data files:")
+import glob
+print("# z samples -- The legacy one (no letter) should be identical to samplesA.")
+print("# samplesB and samplesC should have different z_true and DM_meancosmo samples.")
+print("# {0:<54} {1: <7} {2: <7}".format("Filename", "z_true", "DM_meancosmo"))
+for norm in normalizations:
+    print("###", norm, "point files:")
+    files = glob.glob("./data/phys_samples*_norm{0:}.npy".format(norm))
+    for f in files:
+        file_content = np.load(f, allow_pickle=True).T
+        print("# {0:<54} {1:.4f} {2:.4f}".format(f, np.sort(file_content[0])[-1], np.sort(file_content[1])[-1]))
+
+print("# DM samples -- The legacy one (no seed number) should be identical to 0.")
+print("# The seed1 one should have the same z but different DM sample (DM_obs).")
+print("# The seed2 and seed3 ones should be completely different.")
+print("# {0:<54} {1: <7} {2: <7} {3: <9} {4: <9}".format("Filename", "z_true", "z_obs", "DM_meanc.", "DM_obs"))
+for norm in normalizations:
+    print("###", norm, "point files:")
+    files = glob.glob("./data/Mockdata_*_norm{0:}_obs1.npy".format(norm))
+    for f in files:
+        file_content = np.load(f, allow_pickle=True).item()
+        print("# {0:<54} {1:.4f} {2:.4f} {3:.4f} {4:.4f}".format(f, np.sort(file_content["z_true"])[-1], np.sort(file_content["z_obs"])[-1], np.sort(file_content["DM_meancosmo"])[-1], np.sort(file_content["DM_obs"])[-1]))

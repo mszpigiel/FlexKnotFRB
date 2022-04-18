@@ -18,6 +18,11 @@ normalizations = [100, 1000, 10000]
 #  FRB source distribution scaling with Star Formation Rate
 #  (also implemented uniform distribution and z*exp(-z) exponential distribution)
 cases = ['sfr']
+shift_seed = 0
+data_samples = "samplesA"
+# samplesB and samplesC with seed shifted by 1 and 2 respectively
+# Just "samples" are the old data, identical to samplesA
+# (though npy file differs due to newer software versions)
 
 # Load the base cosmological model, using my cosmology codes wrapper
 
@@ -46,7 +51,7 @@ for i in range(len(cases)):
     phases[case]["5-8"] = {"config": [5, 8, sin.quad(f, 5, 8, epsrel=1e-4)[0]]}
     phases[case]["8-10"] = {"config": [8, 10, sin.quad(f, 8, 10, epsrel=1e-4)[0]]}
     phases[case]["10-15"] = {"config": [10, 15, sin.quad(f, 10, 15, epsrel=1e-3, limlst=200)[0]]}
-    print("Samples in each redshift segment:")
+    print("Samples in each redshift segment (segments for efficient rejection-sampling):")
     print(case, "Total:", sin.quad(f, 5, 15, epsrel=1e-5)[0], "=", np.sum([phases[case]["5-8"]['config'][2], phases[case]["8-10"]['config'][2], phases[case]["10-15"]['config'][2]]))
     print(case, "5-8:", phases[case]["5-8"]['config'][2])
     print(case, "8-10:", phases[case]["8-10"]['config'][2])
@@ -58,7 +63,7 @@ models = {'phys': C}
 #  Dictionary storing the data (uniform and exponential distributions not used in this version)
 data = {'uni': {'samples': []}, 'exp': {'samples': []}, 'sfr': {'samples': []}}
 #  Set a constant seed for reproducibility
-np.random.seed(42)
+np.random.seed(42+shift_seed)
 for number_total in normalizations:
     print("-- Generating N =", number_total, "samples --")
     for case in phases.keys():
@@ -95,7 +100,7 @@ for number_total in normalizations:
             model.fast_DM_array(zinterp, xe_func=model.xefunc_of_xifunc(xi_phys), rtol=1e-7, atol=1e-10),
             aun.pc / aun.cm ** 3))
         for case in phases.keys():
-            filename = 'data/' + modelname + '_samples_' + case + '_norm' + str(number_total) + '.npy'
+            filename = 'data/' + modelname + "_" + data_samples + "_" + case + '_norm' + str(number_total) + '.npy'
             DM_points = []
             for z in data[case]['samples']:
                 DM_points.append([z, fast_DM_of_z(z)])
@@ -105,23 +110,39 @@ for number_total in normalizations:
         print('Done sampling DMs for ' + modelname + ' model.')
 
 
-
-# Check distribution with a plot
+# Demonstrate distribution with a plot
 zplot = np.linspace(5, 15, 1000)
-color_index = 0
-for number_total in normalizations:
-    for modelname in models.keys():
-        for case in phases.keys():
-            filename = 'data/' + modelname + '_samples_' + case + '_norm' + str(number_total) + '.npy'
-            DM_points = np.load(filename)
-            Nbins = int(len(DM_points) / 10)
-            plt.plot(zplot, len(DM_points) * 10 / Nbins * C.frb_distribution(zplot, case=case), color=colors[color_index], alpha=0.5, label="FRB source samples (" + modelname + ' ' + case + ' norm ' + str(number_total) + ")")
-            plt.hist(DM_points.T[0], bins=Nbins, color=colors[color_index], alpha=0.5)
-            color_index += 1
+number_total = 1000
+plt.figure(figsize=(5,4))
+plot_samples = 'samplesA'
+for modelname in models.keys():
+    for case in phases.keys():
+        filename = 'data/' + modelname + "_" + plot_samples + "_" + case + '_norm' + str(number_total) + '.npy'
+        DM_points = np.load(filename)
+        Nbins = 21
+        counts, bins, _ = plt.hist(DM_points.T[0], bins=Nbins, color=plt.cm.tab20b.colors[8], alpha=0.6, range=[5,15],
+            label="Dataset of "+str(number_total)+" samples")
+        counts, bins, _ = plt.hist(DM_points.T[0], bins=Nbins, color=plt.cm.tab20b.colors[8], alpha=1, range=[5,15],
+            histtype="step")
+        filename100 = 'data/' + modelname + "_" + plot_samples + "_" + case + '_norm' + str(100) + '.npy'
+        plt.hist(np.load(filename100).T[0], bins=Nbins, color=plt.cm.tab20b.colors[12], alpha=1, range=[5,15],
+            label="Dataset of "+str(100)+" samples")
+        plt.plot(zplot, np.diff(bins)[0]*len(DM_points.T[0])*C.frb_distribution(zplot, case=case),
+            color=plt.cm.tab20b.colors[0], alpha=0.75,
+            label="Redshift distribution")
+        plt.yscale("log")
+        plt.ylim(0.5, 200)
+        for i in range(10):
+            plt.axhline(1+i, ls=':', alpha=0.5, color="black", lw=0.5)
+        plt.xlim(5, 15)
 
-plt.ylabel(r'Histogram $\propto\mathrm{d}N/\mathrm{d}z$')
-plt.grid()
-plt.xlabel('Redsift $z$')
+handles, labels = plt.gca().get_legend_handles_labels()
+
+plt.ylabel(r'FRB source distribution $\mathrm{d}N/\mathrm{d}z$')
+plt.xlabel('Redshift $z$')
 plt.tight_layout()
-plt.legend()
+plt.legend(np.array(handles)[[2,0,1]], np.array(labels)[[2,0,1]])
+plt.tight_layout()
+plt.savefig("paper_plots/Fig1_A_frb_distribution_"+plot_samples+".pdf")
+plt.savefig("paper_plots/Fig1_A_frb_distribution_"+plot_samples+".png", dpi=600)
 plt.show()
