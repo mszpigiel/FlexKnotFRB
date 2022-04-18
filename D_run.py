@@ -85,6 +85,8 @@ for arg in sys.argv:
         hostname = arg
     elif 'planckprior' in arg:
         priorsetting = "planck"
+    elif 'planck5xprior' in arg:
+        priorsetting = "5xplanck"
     elif 'flatprior' in arg:
         priorsetting = "flat"
     elif 'deltaprior' in arg:
@@ -276,7 +278,6 @@ def loglike_mcmc(flexknot=flexknot, case=case, **kwargs):
         "mode": mode,
         "integration_method": "leggauss",
         "extra_return_bins": extra_return_bins,
-        "clikpath": clikpath,
         "flattentau": flattentau,
         "indiv_logL_output": likezoutput,
         "debugplot": False,
@@ -339,6 +340,10 @@ if priorsetting == 'planck':
     infodict["params"]["Omega_b_over_h"] = {"prior": {"dist": "norm", "loc": 0.0724,  "scale": 0.0011}, "latex": r"\Omega_\mathrm{b}/h"}
     infodict["params"]["Omega_m"] = {"prior": {"dist": "norm", "loc": 0.31108,  "scale": 0.00555}, "latex": r"\Omega_\mathrm{m}"}
     planckstring='_pprior'
+elif priorsetting == '5xplanck':
+    infodict["params"]["Omega_b_over_h"] = {"prior": {"dist": "norm", "loc": 0.0724,  "scale": 0.0011*5}, "latex": r"\Omega_\mathrm{b}/h"}
+    infodict["params"]["Omega_m"] = {"prior": {"dist": "norm", "loc": 0.31108,  "scale": 0.00555*5}, "latex": r"\Omega_\mathrm{m}"}
+    planckstring='_5xpprior'
 # Delta function priors
 elif priorsetting == 'delta':
     infodict["params"]["Omega_b_over_h"] = {"value": 0.0724, "latex": r"\Omega_\mathrm{b}/h"}
