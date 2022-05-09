@@ -44,20 +44,25 @@ Start of important code, adjust settings here:
 version = "final_v2"
 # File name for Figure 1 and some other outputs, and Figure 2+3.
 # (For historical reasons I denote 100 and 1000 FRBs as n3 and n6, respevtively.)
-outfilename = "x1n6_"+version
-outfilename23 = "x1n36_"+version
 # Colors used for Figure 2+3 to be grayscale friendly
 color1 = plt.cm.tab20b.colors[0]
 color2 = plt.cm.tab20b.colors[8]
 
 # Whether or not to generate new samples from the FlexKnot prior, and make new fits for cancelling the prior effect
-regeneratePriors = False
-regenerateTau = False
-redoFits = False
-# Number of prior samples to generate
+regeneratePriors = False #new prior samples
+regenerateTau = False #recompute tau for prior samples
+redoFits = False #redo prior distribution fits
+
+# Number of prior samples
 Nprior = int(1e6)
-# Whether to skip generating the slow and memory-intensive Figure 1
-skipFigure1 = True
+# Option to skip slow and memory-intensive Figure 1
+Fig1_skip = False
+# Option to run a low-resolution version instead
+Fig1_low_res = False
+# Load extra plots (seed 2 and 3, and the ones with 5x planck prior)
+load_extra = False
+# Load very large files (seed 1)
+load_large = False
 
 
 
@@ -499,14 +504,13 @@ def fitPrior(calib, plot=False, key='tau', bw_method=None, label=""):
         ax.hist(calib[key], weights=calib.weights, density=True, bins=1000, range=(lo, up), label='samples', alpha=0.5)
         ax.set_xlabel(key.replace("_", ""))
         ax.semilogy()
-        #plt.ylim(cutoff/10, 1.5*np.max(fit(xplot)))
         if key=="tau":
             ax.set_ylim(1e-4,1e3)
         else:
             ax.set_ylim(1e-6,1e0)
         ax.axvline(fid[key], ls='dashed', color='k',label='True value (i.e. important around here)')
         fig.legend()
-        fig.savefig("paper_plots/priorFits_"+outfilename+"_"+label+".pdf")
+        plt.show()
     return fit
 
 print("Fitting FlexKnot priors")
@@ -602,10 +606,20 @@ def importance_sample_withLogZ(samples, deltaLogL, action='add', inplace=False):
     samples = MCMCSamples(samples) #to avoid bug in importance sample
     return samples.importance_sample(deltaLogL, action=action, inplace=inplace), deltaLogZ
 
-def readNested(filename, chains="chains_x1/hostHPCx1v2/", fixPriors=True, columns=None):
+def readNested(filename, chains="chains_x1/hostHPCx1v2/", columns=None, saveMem=True, fixPriors=True, fixPriorstimesx=1):
+    # columns is an optional argument to specify the variable names
+    # saveMem drops information from memory (RAM) where the loglikelihood for
+    #   every single FRB data point has been saved (does not affect file, just
+    #   to save memory)
+    # fixPriors corrects our priors from Omega_b / H_0 to Omega_b * H_0
+    # fixPriorstimesx = 5 adjusts this for the "5xplanck" prior.
     root = chains+"/"+filename+"_polychord_raw/"+filename
     print(filename, end='')
     samples = NestedSamples(root=root) if columns is None else NestedSamples(root=root, columns=columns)
+    if saveMem:
+        for key in list(samples.keys()):
+            if "logL_z" in key:
+                del samples[key]
     print("(", len(samples), ")")
     samples['Omega_b_H0'] = samples['Omega_b_over_h']*fid['h']**2*100
     samples.tex['Omega_m'] = r'$\Omega_m$'
@@ -613,9 +627,9 @@ def readNested(filename, chains="chains_x1/hostHPCx1v2/", fixPriors=True, column
     samples.tex['Omega_b_H0'] = r'$\Omega_b\cdot H_0$'
     if fixPriors:
         def oldLogPrior(Omega_b_over_h, Omega_m):
-            return sst.norm.logpdf(Omega_b_over_h, loc=0.0724, scale=0.0011)+sst.norm.logpdf(Omega_m, loc=0.31108, scale=0.00555)
+            return sst.norm.logpdf(Omega_b_over_h, loc=0.0724, scale=0.0011*fixPriorstimesx)+sst.norm.logpdf(Omega_m, loc=0.31108, scale=0.00555*fixPriorstimesx)
         def newLogPrior(Omega_b_H0, Omega_m):
-            return sst.norm.logpdf(Omega_b_H0, loc=3.31, scale=0.0167)+sst.norm.logpdf(Omega_m, loc=0.31108, scale=0.00555)
+            return sst.norm.logpdf(Omega_b_H0, loc=3.31, scale=0.0167*fixPriorstimesx)+sst.norm.logpdf(Omega_m, loc=0.31108, scale=0.00555*fixPriorstimesx)
         offset = (samples["logprior__0"]-oldLogPrior(samples["Omega_b_over_h"], samples["Omega_m"])).mean()
         assert np.allclose(samples["logprior__0"], offset+oldLogPrior(samples["Omega_b_over_h"], samples["Omega_m"]), atol=1e-3)
         samples.drop("Omega_b_over_h", axis=1, inplace=True)
@@ -682,17 +696,53 @@ def readAllFlexNest(filenames, chains=None, reweigh=False, reweighFits=None, plo
             data["rwMergedChain_"+key] = rwMerge
     return data
 
+# --- Load all the NestedSampling chains ---
 
-x1_pp_n3_vzend_eprior_etl_tanh_dz = readNested("run_hostcalx_try2_polyba_Mockdata_phys_sfr_z10%_norm100_obs1_vardz_pprior_etl_eprior", chains="chains/FRBs/")
-x1_pp_n6_vzend_eprior_etl_tanh_dz = readNested("run_hostcalx_try2_polyba_Mockdata_phys_sfr_z10%_norm1000_obs1_vardz_pprior_etl_eprior", chains="chains/FRBs/")
-x1_pp_n9_vzend_eprior_etl_tanh_dz = readNested("run_hostcalx_try2_polyba_Mockdata_phys_sfr_z10%_norm10000_obs1_vardz_pprior_etl_eprior", chains="chains/FRBs/")
+chains_tanh = "chains/FRBs/tanh_chains"
+x1_pp_n3_vzend_eprior_etl_tanh_dz = readNested("run_hostcalx_try2_polyba_Mockdata_phys_sfr_z10%_norm100_obs1_vardz_pprior_etl_eprior", chains=chains_tanh)
+x1_pp_n6_vzend_eprior_etl_tanh_dz = readNested("run_hostcalx_try2_polyba_Mockdata_phys_sfr_z10%_norm1000_obs1_vardz_pprior_etl_eprior", chains=chains_tanh)
+x1_pp_n9_vzend_eprior_etl_tanh_dz = readNested("run_hostcalx_try2_polyba_Mockdata_phys_sfr_z10%_norm10000_obs1_vardz_pprior_etl_eprior", chains=chains_tanh)
 x1_pp_n3_vzend_eprior_etl_tanh_dz_rw, _ = reweighNested(x1_pp_n3_vzend_eprior_etl_tanh_dz, key="tau", fit=priorFitTanh, plot=False)
 x1_pp_n6_vzend_eprior_etl_tanh_dz_rw, _ = reweighNested(x1_pp_n6_vzend_eprior_etl_tanh_dz, key="tau", fit=priorFitTanh, plot=False)
 x1_pp_n9_vzend_eprior_etl_tanh_dz_rw, _ = reweighNested(x1_pp_n9_vzend_eprior_etl_tanh_dz, key="tau", fit=priorFitTanh, plot=False)
 
-n=10; x1_pp_n3_vzend_eprior_etl = readAllFlexNest(["run_hostHPCx1v2_polyba_Mockdata_phys_sfr_z10%_norm100_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains="chains/FRBs/", reweigh=True, reweighFits=prior_fits)
-n=10; x1_pp_n6_vzend_eprior_etl = readAllFlexNest(["run_hostHPCx1v2_polyba_Mockdata_phys_sfr_z10%_norm1000_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains="chains/FRBs/", reweigh=True, reweighFits=prior_fits)
+chains_seed0 = "chains/FRBs/flexknot_chains"
+n=10; x1_pp_n3_vzend_eprior_etl = readAllFlexNest(["run_hostHPCx1v2_polyba_Mockdata_phys_sfr_z10%_norm100_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains=chains_seed0, reweigh=True, reweighFits=prior_fits)
+n=10; x1_pp_n6_vzend_eprior_etl = readAllFlexNest(["run_hostHPCx1v2_polyba_Mockdata_phys_sfr_z10%_norm1000_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains=chains_seed0, reweigh=True, reweighFits=prior_fits)
 
+# --- Extra chains to check effects of random seed & priors ---
+
+# New DM samples, same redshifts:
+# Note that these two sets (*_seed1) are moved to a separate zenodo data set
+# due to their large size (27GB, 71GB uncompressed).
+if load_large:
+    chains_seed1 = "chains/FRBs/update_seed1"
+    n=10; x1_pp_n3_vzend_eprior_etl_seed1 = readAllFlexNest(["run_hostHPCx1v2_s2_polyba_Mockdata_s1_phys_sfr_z10%_norm100_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_likez_vzend"for f in range(n)], chains=chains_seed1, reweigh=True, reweighFits=prior_fits)
+    n=10; x1_pp_n6_vzend_eprior_etl_seed1 = readAllFlexNest(["run_hostHPCx1v2_s2_polyba_Mockdata_s1_phys_sfr_z10%_norm1000_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_likez_vzend"for f in range(n)], chains=chains_seed1, reweigh=True, reweighFits=prior_fits)
+
+# New z *and* DM samples, twice:
+if load_extra:
+    chains_seed23 = "chains/FRBs/update_seed23"
+    n=10; x1_pp_n3_vzend_eprior_etl_seed2 = readAllFlexNest(["run_hostHPC22_polyba_Mockdata_phys_seed2_sfr_z10%_norm100_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains=chains_seed23, reweigh=True, reweighFits=prior_fits)
+    n=10; x1_pp_n6_vzend_eprior_etl_seed2 = readAllFlexNest(["run_hostHPC22_polyba_Mockdata_phys_seed2_sfr_z10%_norm1000_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains=chains_seed23, reweigh=True, reweighFits=prior_fits)
+    n=10; x1_pp_n3_vzend_eprior_etl_seed3 = readAllFlexNest(["run_hostHPC22_polyba_Mockdata_phys_seed3_sfr_z10%_norm100_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains=chains_seed23, reweigh=True, reweighFits=prior_fits)
+    n=10; x1_pp_n6_vzend_eprior_etl_seed3 = readAllFlexNest(["run_hostHPC22_polyba_Mockdata_phys_seed3_sfr_z10%_norm1000_obs1_monotonousflexknot"+str(f+1)+"_pprior_etl_eprior_vzend"for f in range(n)], chains=chains_seed23, reweigh=True, reweighFits=prior_fits)
+
+# Extra Planck prior runs with 1x and 5x priors to check prior effects
+if load_extra:
+    chains_extra_planck = "chains/FRBs/update_planck"
+    x1_pp_f4 = readNested("run_hostHPC22_polyba_Mockdata_phys_sfr_z10%_norm1000_obs1_monotonousflexknot4_pprior_etl_eprior_vzend", chains=chains_extra_planck)
+    x1_5xpp_f4 = readNested("run_hostHPC22_polyba_Mockdata_phys_sfr_z10%_norm1000_obs1_monotonousflexknot4_5xpprior_etl_eprior_vzend", chains=chains_extra_planck, fixPriorstimesx=5)
+
+
+# Data selection
+#  Fig 3
+chainsFig3 = x1_pp_n6_vzend_eprior_etl; stringFig3 = "seed0_"
+#  Fig 4 and 5
+chain100 = x1_pp_n3_vzend_eprior_etl['rwMergedChain_tau']
+chain1k = x1_pp_n6_vzend_eprior_etl['rwMergedChain_tau']
+
+# --- Analyze data ---
 
 print("======= Running analysis =======")
 
@@ -799,13 +849,18 @@ for i in range(2):
         print("    (bestfit)", key, "= {0:.4f}".format(bf)+"+{0:.5f}".format(CL[1]-bf)+"-{0:.5f}".format(bf-CL[0])+" (std =", std, ")", "This is {0:.1f}.".format(np.diff(CL)[0]/2*100/bf),"% acc.")
 
 
-print("  Evidence Pipeline (SM):")
+print("  Relative Evidence FlexKnot:")
 for i in range(3):
     print("    100 FRBs,", i+2, "knots:","{0:.2f}+/-{1:.2f}".format(np.exp(x1_pp_n3_vzend_eprior_etl['logZs']['logZ'].iloc[i]), np.exp(x1_pp_n3_vzend_eprior_etl['logZs']['logZ'].iloc[i])*np.std(x1_pp_n3_vzend_eprior_etl['chains'][0].logZ(1000))))
+for i in range(5):
+    print("    1000 FRBs,", i+2, "knots:","{0:.2f}+/-{1:.2f}".format(np.exp(x1_pp_n6_vzend_eprior_etl['logZs']['logZ'].iloc[i]), np.exp(x1_pp_n6_vzend_eprior_etl['logZs']['logZ'].iloc[i])*np.std(x1_pp_n6_vzend_eprior_etl['chains'][0].logZ(1000))))
+
 
 print("  A_s constraints: See Figure 3 section.")
 
 print("=========== Table 1  ===========")
+print("Note: Bestfit results are based on KDE peak, and numerical performance can",
+      "vary, leading to negligible changes like tau bestfit = 0.0509 --> 0.0510.")
 
 def newLine(j):
     if j==0:
@@ -821,94 +876,96 @@ def substack(up, low, d=1):
     else:
         return r"$\substack{+"+"{0:.4f}".format(up)+r"\\-"+"{0:.4f}".format(low)+r"}$"
 
-for i in range(5):
-    key = ["z_at_xi0.1", "z_at_xi0.5", "z_at_xi0.9", "tau", "tauNoETL"][i]
-    var_key = ["z_at_xi0.1", "z_at_xi0.5", "z_at_xi0.9", "tau", "tau"][i]
-    name = [r"Start ($x_i=0.1$)", r"Midpoint ($x_i=0.5$)", r"End ($x_i=0.9$)", r"Optical depth $\tau$", r"$\tau$ without CMB"][i]
-    print(name, end=' & ')
-    for j in range(2):
-        data = [x1_pp_n3_vzend_eprior_etl, x1_pp_n6_vzend_eprior_etl][j]['rwMergedChain_'+key]
-        bf = bestFit(data, key=var_key)
-        int1 = fastCL(data, key=var_key, level=0.68)
-        int2 = fastCL(data, key=var_key, level=0.95)
-        if "xi" in key:
-            print("$z="+"{0:.1f}".format(bf)+"$ & "+substack(int1[1]-bf, bf-int1[0])+" & "+substack(int2[1]-bf, bf-int2[0]), end="")
-            newLine(j)
-        elif "tau" in key:
-            print("$"+"{0:.4f}".format(bf)+"$ & "+substack(int1[1]-bf, bf-int1[0], d=4)+" & "+substack(int2[1]-bf, bf-int2[0], d=4), end="")
-            newLine(j)
-        else:
-            assert False
+def printTable():
+    for i in range(5):
+        key = ["z_at_xi0.1", "z_at_xi0.5", "z_at_xi0.9", "tau", "tauNoETL"][i]
+        var_key = ["z_at_xi0.1", "z_at_xi0.5", "z_at_xi0.9", "tau", "tau"][i]
+        name = [r"Start ($x_i=0.1$)", r"Midpoint ($x_i=0.5$)", r"End ($x_i=0.9$)", r"Optical depth $\tau$", r"$\tau$ without CMB"][i]
+        print(name, end=' & ')
+        for j in range(2):
+            data = [x1_pp_n3_vzend_eprior_etl, x1_pp_n6_vzend_eprior_etl][j]['rwMergedChain_'+key]
+            bf = bestFit(data, key=var_key)
+            int1 = fastCL(data, key=var_key, level=0.68)
+            int2 = fastCL(data, key=var_key, level=0.95)
+            if "xi" in key:
+                print("$z="+"{0:.1f}".format(bf)+"$ & "+substack(int1[1]-bf, bf-int1[0])+" & "+substack(int2[1]-bf, bf-int2[0]), end="")
+                newLine(j)
+            elif "tau" in key:
+                print("$"+"{0:.4f}".format(bf)+"$ & "+substack(int1[1]-bf, bf-int1[0], d=4)+" & "+substack(int2[1]-bf, bf-int2[0], d=4), end="")
+                newLine(j)
+            else:
+                assert False
+
+printTable()
 
 
-print("=========== Figure 1 ===========")
-
-simsDict = x1_pp_n6_vzend_eprior_etl
-priorChains = priorSamples
+print("=========== Figure 3 (was 1) ===========")
 
 # We use always linear interpolation here, not PCHIP.
 usePCHIP = False
 
-def multiXiPlot(chains, logEvidences=None, ax=None, prior=False, debug=False, DM=False, cache=None, histogram=False, lines=False, **kwargs):
-    zplot_fine = np.concatenate((np.linspace(5.1,10,20, endpoint=False), np.linspace(10,15,10, endpoint=False), np.linspace(15,29.9,10)))
-    zplot_sparse = np.concatenate(([5.1], np.linspace(5.2,29.8,10), [29.9]))
-    zplot = zplot_sparse if prior else zplot_fine
+def fgivenx_plot(chains, logEvidences, ax_fgivenx, cache=None,
+                 prior=False, lines=False, **kwargs):
     ny = 100 if prior else 1000
-    if histogram:
-        zplot = np.linspace(5,30,200)
-        ny = 100
-
+    if Fig1_low_res:
+        nx = 10 if prior else 1000
+    else:
+        nx = 100 if prior else 1000
+    zplot = np.linspace(5.01, 29.99, nx)
     if logEvidences is None:
         logEvidences = [c.logZ() for c in chains]
     elif logEvidences=="1":
         logEvidences = [1 for c in chains]
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(6, 4))
-
     xifuncs_specific = [lambda z,p, keys=chains[i].keys(): xifunc(z, p, keys=keys, usePCHIP=usePCHIP) for i in range(len(chains))]
     weights = [c.weights for c in chains]
-
-    cbar = fgivenx.plot_contours(xifuncs_specific, zplot, chains, ax=ax, weights=weights, logZ=logEvidences, cache=cache, ny=ny, **kwargs)
-    if lines:
-        fgivenx.plot_lines(xifuncs_specific, zplot, chains, ax=ax, weights=weights, logZ=logEvidences, cache=cache)
-
+    if not lines:
+        cbar = fgivenx.plot_contours(xifuncs_specific, zplot, chains, ax=ax_fgivenx,
+            weights=weights, logZ=logEvidences, cache=cache+"{0:.2f}".format(len(zplot)+np.sum(zplot)), ny=ny, **kwargs)
+    else:
+        cbar = fgivenx.plot_lines(xifuncs_specific, zplot, chains, ax=ax_fgivenx, weights=weights, logZ=logEvidences, cache=cache)
     return cbar
 
-def makeXiPlot(posteriorSims=None, posteriorSims_logZs=None, priorSims=None,
-    midpointSimsDict=None, filename="paper_plots/E_"+outfilename+"_xiplot.pdf",
-    histogram = False):
 
-    fig, ax_fgivenx = plt.subplots(figsize=(13, 4))
+def fgivenx_wrapper(posteriorSims, posteriorSims_logZs,
+    priorSamples=None, midpointSimsDict=None,
+    figsize=(13, 4), lines=False, **kwargs):
+    # posteriorSims, posteriorSims_logZs -- mandatory
+    # priorSamples -- optional to plot priors
+    # midpointSimsDict -- optional to plot errorbars
+
+    fig, ax_fgivenx = plt.subplots(figsize=figsize)
+    ax_fgivenx.set_xlabel("Redshift $z$")
+    ax_fgivenx.set_ylabel("Ionized fraction $x_i$")
+    ax_fgivenx.set_xlim(5,30)
     plt.grid(ls='dotted')
-    assert posteriorSims is not None, "Please pass posteriorSims"
-    assert posteriorSims_logZs is not None, "Please pass posteriorSims_logZs"
-    plotPrior = True if priorSims is not None else False
 
+    # Plot prior
+    if priorSamples is not None:
+        lenstr = str(np.sum([len(priorSamples[i]) for i in range(len(priorSamples))]))
+        cbar_prior = fgivenx_plot(priorSamples, "1", ax_fgivenx,
+            "cache/fgivenx_prior_"+lenstr+"/", prior=True,
+            alpha=1, colors=plt.cm.Purples_r, lines=lines, **kwargs)
+
+    # Plot posterior
     lenstr = str(np.sum([len(posteriorSims[i]) for i in range(len(posteriorSims))]))
+    cbar = fgivenx_plot(posteriorSims, posteriorSims_logZs, ax_fgivenx,
+        "cache/fgivenx_post_"+lenstr+"/",
+        alpha=0.7, colors=plt.cm.Oranges_r, lines=lines, **kwargs)
 
-    if plotPrior:
-        cbar_prior = multiXiPlot(priorSims, logEvidences="1", contour_line_levels=[1,2],
-            ax=ax_fgivenx, alpha=1, rasterize_contours=True, fineness=0.25,
-            colors=plt.cm.Purples_r,
-            cache="cache/fgivenx_prior_"+lenstr+outfilename+"_/",
-            histogram=histogram, prior=True)
-
-    cbar = multiXiPlot(posteriorSims, logEvidences=posteriorSims_logZs,
-        ax=ax_fgivenx, contour_line_levels=[1,2], alpha=0.7, linewidths=1,
-        fineness=0.25,  rasterize_contours=True, colors=plt.cm.Oranges_r,
-        cache="cache/fgivenx_post_"+lenstr+outfilename+"_/",
-        histogram=histogram)
+    if lines:
+        return fig, ax_fgivenx, cbar
 
     # Plot Kulkarni et al. and see if we do recover it
-    f = ax_fgivenx.plot(np.linspace(5,15,1000), xi_phys(np.linspace(5,15,1000)), label='Fiducial', color="darkturquoise", linestyle='dashed', lw=2, alpha=1)
+    ax_fgivenx.plot(np.linspace(5,15,1000), xi_phys(np.linspace(5,15,1000)), label='Fiducial', color="darkturquoise", linestyle='dashed', lw=2, alpha=1)
+
+    # Prepare legend
     colorbar = fig.colorbar(cbar, ticks=[0,1,2], label='Confidence level', pad=0)
     colorbar.set_label("Confidence level", labelpad=0.01)
     colorbar.set_ticklabels(["0", r"68\%", r"95\%"])
-    ax_fgivenx.set_xlim(5,30)
-    ax_fgivenx.set_xlabel("Redshift $z$")
-    ax_fgivenx.set_ylabel("Ionized fraction $x_i$")
     orange_patch = mpatches.Patch(color=colorbar.cmap(0.5), label='Posterior')
     purple_patch = mpatches.Patch(color=plt.cm.Purples_r(0.5), label='Prior')
+
+    # Optionally plot error bars
     if midpointSimsDict is not None:
         xi = [0.1, 0.5, 0.9]
         means = []
@@ -926,48 +983,59 @@ def makeXiPlot(posteriorSims=None, posteriorSims_logZs=None, priorSims=None,
         planckstyle.update({"ecolor":'blue'})
         ax_fgivenx.errorbar(means, xi, xerr=xerr2.T, **planckstyle, label=r"95\% C.L.")
 
+    # Plot legend
     handles, labels = ax_fgivenx.get_legend_handles_labels()
     axbox = ax_fgivenx.get_position()
     x_value=0.515; y_value=0.5
     loc = (0.57,0.65)
-    if plotPrior:
+    if priorSamples is not None:
         plt.legend(handles=[orange_patch, purple_patch, *handles], labels=["Posterior", "Prior", *labels])
+        colorbar_prior = fig.colorbar(cbar_prior, ticks=[])
     else:
         plt.legend(handles=[orange_patch, *handles], labels=["Posterior", *labels])
+
     plt.tight_layout()
-    if plotPrior:
-        colorbar_prior = fig.colorbar(cbar_prior, ticks=[])
 
-    # Sorry for this messy part, it just sets the position of the colorbar.
-    # Just didn't want to touch it anymore after it worked.
-    loc = deepcopy(colorbar.ax.get_position())
-    loc.x0 -= 0.1
-    loc.x1 -= 0.1
-    colorbar.ax.set_position(deepcopy(loc))
-    loc.x0 += 0.022
-    loc.x1 += 0.022
-    colorbar_prior.ax.set_position(loc)
-    pos=colorbar.ax.get_position()
-    pos.x0 = 0.7245576780301003
-    pos.x1 = 0.7404006154281132
-    colorbar.ax.set_position(deepcopy(pos))
-    pos.x1 -= 0.02
-    pos.x0 -= 0.02
-    colorbar_prior.ax.set_position(pos)
+    # Manual adjusting of colorbar position
+    if priorSamples is not None:
+        loc = deepcopy(colorbar.ax.get_position())
+        loc.x0 -= 0.1
+        loc.x1 -= 0.1
+        colorbar.ax.set_position(deepcopy(loc))
+        loc.x0 += 0.022
+        loc.x1 += 0.022
+        colorbar_prior.ax.set_position(loc)
+        pos=colorbar.ax.get_position()
+        pos.x0 = 0.7245576780301003
+        pos.x1 = 0.7404006154281132
+        colorbar.ax.set_position(deepcopy(pos))
+        pos.x1 -= 0.02
+        pos.x0 -= 0.02
+        colorbar_prior.ax.set_position(pos)
 
-    plt.savefig(filename, bbox_inches='tight')
     return fig, colorbar, colorbar_prior
 
 
-if not skipFigure1:
-    makeXiPlot(posteriorSims=simsDict['chains'],
-        posteriorSims_logZs=list(simsDict['logZs']['logZ']),
-        priorSims=priorChains,
-        midpointSimsDict = simsDict, histogram=False)
+def run_xi_plots(c, s):
+    fgivenx_wrapper(c['chains'], list(c['logZs']['logZ']),
+        priorSamples=priorSamples, midpointSimsDict=c,
+        figsize=(13, 4), fineness=0.25, rasterize_contours=True,
+        contour_line_levels=[1,2], linewidths=1)
+    if Fig1_low_res:
+        s += "_low_res"
+    plt.savefig("paper_plots/Fig3_xiplot_"+s+version+".pdf", bbox_inches='tight')
+    plt.savefig("paper_plots/Fig3_xiplot_"+s+version+".png", dpi=600, bbox_inches='tight')
 
 
+if not Fig1_skip:
+    run_xi_plots(chainsFig3, stringFig3)
+    # For other seeds:
+    #run_xi_plots(x1_pp_n6_vzend_eprior_etl_seed1, "seed1_")
+    #run_xi_plots(x1_pp_n6_vzend_eprior_etl_seed2, "seed2_")
+    #run_xi_plots(x1_pp_n6_vzend_eprior_etl_seed3, "seed3_")
 
-print("=========== Figure 2 ===========")
+
+print("=========== Figure 4 (was 2) ===========")
 
 #Planck result
 def asym_norm_logpdf(x, mu=0.0504, sigmaleft=0.0079, sigmaright=0.0050):
@@ -976,83 +1044,79 @@ def asym_norm_logpdf(x, mu=0.0504, sigmaleft=0.0079, sigmaright=0.0050):
     -0.5*(x-mu)**2/sigmaleft**2*(1-heavi)\
     -0.5*(x-mu)**2/sigmaright**2*(heavi)
 
-def plotTauHistograms(chain3, chain6, bw=True):
-    chain3 = deepcopy(chain3); chain3.limits['tau'] = [0.03,0.09]
-    chain6 = deepcopy(chain6); chain6.limits['tau'] = [0.03,0.09]
-    filename = "paper_plots/E_"+outfilename23+"_tauplot"
+max_asym_norm_logpdf = np.max(np.exp(asym_norm_logpdf(np.linspace(0.04, 0.06, 1000))))
+
+def run_tau_histogram_plots(c3, c6, bw=True, outfilename=None, line=False):
+    c3 = deepcopy(c3); c3.limits['tau'] = [0.03,0.09]
+    c6 = deepcopy(c6); c6.limits['tau'] = [0.03,0.09]
+    filename = "paper_plots/Fig4_tauplot_"+outfilename
     xplot = np.linspace(0.03, 0.09, 10000)
-    planckFunction = MCMCSamples(np.array([xplot]).T, weights=np.exp(asym_norm_logpdf(xplot+0.0504-fid['tau'])), columns=['tau'])
     if bw:
         filename += "_bw"
         gs = lambda r,g,b: [0.2989 * r + 0.5870 * g + 0.1140 * b]*3
     else:
         gs = lambda r,g,b: (r,g,b)
 
-    fig, axes = chain3.plot_1d("tau", label=r"$100$ FRBs", color=gs(*color1), alpha=1, plot_type='hist', bins=50, histtype='step', lw=1.5)
-    chain6.plot_1d(label=r"$1000$ FRBs", axes=axes, alpha=0.6, color=gs(*color2), plot_type='hist', bins=50)
+    fig, axes = c3.plot_1d("tau", label=r"$100$ FRBs", color=gs(*color1), alpha=1, plot_type='hist', bins=50, histtype='step', lw=1.5)
+    c6.plot_1d(label=r"$1,000$ FRBs", axes=axes, alpha=0.6, color=gs(*color2), plot_type='hist', bins=50)
+    if line:
+        axes["tau"].axvline(fid["tau"], color="black", ls="dotted", label="Truth (input)")
 
     fig.set_size_inches(5,2.5)
-    planckFunction.plot_1d(axes, color="black", ls='dashed', label='Planck CMB')
+    axes["tau"].plot(xplot, np.exp(asym_norm_logpdf(xplot, mu=fid['tau']))/max_asym_norm_logpdf, ls="--", color="black", label='Planck CMB')
     axes['tau'].set_xticks([0.04, 0.05,0.06,0.07, 0.08])
     axes['tau'].get_yaxis().set_visible(False)
     axes['tau'].set_xlabel(r"Optical depth $\tau$")
     axes['tau'].set_xlim(0.03, 0.09)
     handles, labels = axes['tau'].get_legend_handles_labels()
     axbox = axes['tau'].get_position()
-    x_value=0.515; y_value=0.5
+    x_value=0.515; y_value=0.4
     fig.legend(handles, labels, loc=(axbox.x0 + x_value, axbox.y0 + y_value))
     plt.tight_layout()
     plt.savefig(filename+".pdf")
+    plt.savefig(filename+".png", dpi=600)
     return fig
 
-#Also for Figure 3:
-chain3 = x1_pp_n3_vzend_eprior_etl['rwMergedChain_tau']
-chain6 = x1_pp_n6_vzend_eprior_etl['rwMergedChain_tau']
+# Make color and grayscale versions
+run_tau_histogram_plots(chain100, chain1k, bw=True, outfilename="line_seed0_"+version, line=True)
+run_tau_histogram_plots(chain100, chain1k, bw=False, outfilename="line_seed0_"+version, line=True)
 
-plotTauHistograms(chain3, chain6, bw=False)
-plotTauHistograms(chain3, chain6, bw=True)
+# Versions with other seeds:
+#run_tau_histogram_plots(x1_pp_n3_vzend_eprior_etl_seed1['rwMergedChain_tau'],
+#                  x1_pp_n6_vzend_eprior_etl_seed1['rwMergedChain_tau'],
+#                  bw=False, outfilename="seed1_"+version)
+#
+#run_tau_histogram_plots(x1_pp_n3_vzend_eprior_etl_seed2['rwMergedChain_tau'],
+#                  x1_pp_n6_vzend_eprior_etl_seed2['rwMergedChain_tau'],
+#                  bw=False, outfilename="seed2_"+version)
+#
+#run_tau_histogram_plots(x1_pp_n3_vzend_eprior_etl_seed3['rwMergedChain_tau'],
+#                  x1_pp_n6_vzend_eprior_etl_seed3['rwMergedChain_tau'],
+#                  bw=False, outfilename="seed3_"+version)
 
 
-print("=========== Figure 3 ===========")
+print("=========== Figure 5 (now 3) ===========")
 
-kde3 = sst.gaussian_kde(chain3.tau, weights=chain3.weights)
-kde6 = sst.gaussian_kde(chain6.tau, weights=chain6.weights)
-kde_interp = np.linspace(planckmnu.tau.min(), planckmnu.tau.max(), 1000)
-fit3 = sip.interp1d(kde_interp, kde3(kde_interp))
-fit6 = sip.interp1d(kde_interp, kde6(kde_interp))
-
-addll3 = np.log(fit3(planckmnu.tau))
-addll6 = np.log(fit6(planckmnu.tau))
-planckmnunew_frb3 = MCMCSamples(planckmnu).importance_sample(addll3, action='add')
-planckmnunew_frb6 = MCMCSamples(planckmnu).importance_sample(addll6, action='add')
-
-print("======= A_s  constraints =======")
-print("Relative error on primordial power spectrum amplitude ln(1e10 A_s):")
-
-def printRelError(samples, label="Planck+?", key="logA"):
+def print_rel_error(samples, label="Planck+?", key="logA"):
     bf = bestFit(samples, key=key)
     CL = fastCL(samples, key=key, level=0.68)
     diff = np.diff(CL)[0]
     print(label+": {0:.2f}%".format(diff/2*100/bf))
     print("  (bestfit) logA = {0:.3f}".format(bf)+"+{0:.3f}".format(CL[1]-bf)+"-{0:.3f}".format(bf-CL[0])+" (std =", std, ")")
 
-
-printRelError(planckmnu, label="  Planck alone")
-printRelError(planckmnunew_frb3, label="  Planck + 100 FRBs")
-printRelError(planckmnunew_frb6, label="  Planck + 1000 FRBs")
-
-def plotAsTau(planckmnu, planckmnunew_frb3, planckmnunew_frb6, bw=True):
+def run_As_plots(planckmnu, planckmnunew_frb3, planckmnunew_frb6, bw=True, outfilename=None):
     cosmotriangle = ['tau', 'logA']
-    filename = "paper_plots/E_"+outfilename23+"_Astauplot"
+    filename = "paper_plots/Fig5_tauAsplot_"+outfilename
     if bw:
         gs = lambda r,g,b: [0.2989 * r + 0.5870 * g + 0.1140 * b]*3
         filename += "_bw"
     else:
         gs = lambda r,g,b: (r,g,b)
-    fig, axes = planckmnunew_frb6.plot_2d(cosmotriangle, color=gs(*color2), types={'lower':'kde'}, label='+1000 FRB', ls='dotted')
-    planckmnu.plot_2d(axes=axes, color='black', ls='dashed', label="Planck CMB", facecolor=None, lw=1)
-    planckmnunew_frb3.plot_2d(axes=axes, color=gs(*color1), label='+100 FRB', facecolor=None, lw=1.5)
+    fig, axes = planckmnunew_frb6.plot_2d(cosmotriangle, color=gs(*color2), types={'lower':'kde'}, label='+1,000 FRBs', ls='dotted')
+    planckmnu.plot_2d(axes=axes, edgecolor='black', ls='dashed', label="Planck CMB", types={'lower':'kde'}, facecolor=None, lw=1)
+    planckmnunew_frb3.plot_2d(axes=axes, edgecolor=gs(*color1), label='+100 FRBs', types={'lower':'kde'}, facecolor=None, lw=1.5)
 
+    axes['tau']['logA'].set_ylabel(r"$\ln(10^{10}A_s)$")
     fig.set_size_inches(5,2.5)
     handles, labels = axes['tau']['logA'].get_legend_handles_labels()
     handles[1] = mpatches.Patch(edgecolor="black", ls="dashed", label='Planck CMB', facecolor="white")
@@ -1065,11 +1129,281 @@ def plotAsTau(planckmnu, planckmnunew_frb3, planckmnunew_frb6, bw=True):
     axes['tau']['logA'].set_xlabel(r"Optical depth $\tau$")
     axes['tau']['logA'].set_xlim(0.035, 0.0815)
     plt.savefig(filename+".pdf")
+    plt.savefig(filename+".png", dpi=600)
     return fig
 
-plotAsTau(planckmnu, planckmnunew_frb3, planckmnunew_frb6, bw=True)
-plotAsTau(planckmnu, planckmnunew_frb3, planckmnunew_frb6, bw=False)
+def run_As_analysis(chain100, chain1k, outfilename=None):
+    kde3 = sst.gaussian_kde(chain100.tau, weights=chain100.weights)
+    kde6 = sst.gaussian_kde(chain1k.tau, weights=chain1k.weights)
+    kde_interp = np.linspace(planckmnu.tau.min(), planckmnu.tau.max(), 1000)
+    fit3 = sip.interp1d(kde_interp, kde3(kde_interp))
+    fit6 = sip.interp1d(kde_interp, kde6(kde_interp))
+
+    addll3 = np.log(fit3(planckmnu.tau))
+    addll6 = np.log(fit6(planckmnu.tau))
+    planckmnunew_frb3 = MCMCSamples(planckmnu).importance_sample(addll3, action='add')
+    planckmnunew_frb6 = MCMCSamples(planckmnu).importance_sample(addll6, action='add')
+
+    print("Relative error on primordial power spectrum amplitude ln(1e10 A_s):")
+
+    print_rel_error(planckmnu, label="  Planck alone")
+    print_rel_error(planckmnunew_frb3, label="  Planck + 100 FRBs")
+    print_rel_error(planckmnunew_frb6, label="  Planck + 1000 FRBs")
+
+    run_As_plots(planckmnu, planckmnunew_frb3, planckmnunew_frb6, bw=True, outfilename=outfilename)
+    run_As_plots(planckmnu, planckmnunew_frb3, planckmnunew_frb6, bw=False, outfilename=outfilename)
 
 
-plt.show()
+
+run_As_analysis(chain100, chain1k, outfilename="seed0_"+version)
+
+# For chains with other seeds:
+#run_As_analysis(x1_pp_n3_vzend_eprior_etl_seed1['rwMergedChain_tau'],
+#           x1_pp_n6_vzend_eprior_etl_seed1['rwMergedChain_tau'],
+#           outfilename="seed1_"+version)
+#run_As_analysis(x1_pp_n3_vzend_eprior_etl_seed2['rwMergedChain_tau'],
+#           x1_pp_n6_vzend_eprior_etl_seed2['rwMergedChain_tau'],
+#           outfilename="seed2_"+version)
+#run_As_analysis(x1_pp_n3_vzend_eprior_etl_seed3['rwMergedChain_tau'],
+#           x1_pp_n6_vzend_eprior_etl_seed3['rwMergedChain_tau'],
+#           outfilename="seed3_"+version)
+
+
+print("============= New Figure 2 =============")
+def renameaxes(ax, newname='2'):
+    newaxes={}
+    for k1 in ax.keys():
+        kn1 = k1[:-1]+newname
+        newaxes[kn1] = {}
+        for k2 in ax[k1].keys():
+            kn2 = k2[:-1]+newname
+            print(k1,k2,"->",kn1,kn2)
+            newaxes[kn1][kn2] = ax[k1][k2]
+    return pd.DataFrame(newaxes)
+
+def paramplot(chains, n=3, axes=None, method="kde"):
+    chain = deepcopy(chains[n])
+    for i in range(n+1):
+        chain.limits["z"+str(n+1)] = [5, 30]
+    for i in range(n-1):
+        chain.limits["x"+str(n+2)] = [0, 1]
+    print("Keys:", chain.keys())
+    zorder=10
+    cd = [plt.cm.tab20b.colors[8], plt.cm.tab20b.colors[4], plt.cm.tab20b.colors[16]]
+    if axes is None:
+        fig, axes = chain.plot_2d(['z2','x2'], types={"lower": method}, alpha=0.7, label='Knot 2', color=cd[1])
+        for i in range(n-1):
+            axes = renameaxes(axes, newname=str(i+3))
+            chain.plot_2d(axes, alpha=0.7, types={"lower": method}, label='Knot '+str(i+3), color=cd[(i+2)%len(cd)])
+    else:
+        fig = None
+        for i in range(n):
+            axes = renameaxes(axes, newname=str(i+2))
+            chain.plot_2d(axes, alpha=0.7, types={"lower": method}, color=cd[(i+1)%len(cd)], facecolor=None, ls="--")
+    print(chain.limits)
+    k = axes.keys()[0]
+    j = axes[k].keys()[0]
+    planckstyle = {"fmt":'o', "markersize":4, "lw": 2, "capsize": 4}
+    handles, labels = axes[k][j].get_legend_handles_labels()
+    return fig, axes
+
+illustration_n = 3
+fig,axes = paramplot(x1_pp_n6_vzend_eprior_etl['chains'], n=illustration_n)
+plt.ylabel("$x_i$ knot coordinates")
+plt.xlabel("$z$ knot coordinates")
+assert illustration_n == 3
+illustration_keys = np.array(["z1","z2","z3","z4","z5","x2","x3","x4"])
+illustration_points = []
+illustration_widths = []
+for k in illustration_keys:
+    illustration_points.append(x1_pp_n6_vzend_eprior_etl['chains'][illustration_n][k].mean())
+    illustration_widths.append(x1_pp_n6_vzend_eprior_etl['chains'][illustration_n][k].std())
+
+illustration_dict = dict(zip(illustration_keys, illustration_points))
+illustration_dict["x1"] = 1
+illustration_dict["x5"] = 0
+d = illustration_dict
+illustration_points = np.array(illustration_points)
+illustration_widths = np.array(illustration_widths)
+zplot=np.linspace(4,31,1000)
+colorline="black"
+plt.plot(zplot, xifunc(zplot, illustration_points, illustration_keys), color=colorline, zorder=1, lw=2)
+scatter_z = [illustration_dict["z"+str(i)] for i in [1,2,3,4,5]]
+scatter_x = [1,*[illustration_dict["x"+str(i)] for i in [2,3,4]],0]
+plt.scatter(scatter_z, scatter_x, color=colorline, zorder=2)
+figsize = [5,3]
+fig.set_size_inches(*figsize)
+plt.xlim(4.5,30)
+plt.xticks([5,10,15,20,25,30])
+plt.yticks([0,0.5,1])
+plt.ylim(-0.05,1.02)
+xsize = figsize[0]/25
+ysize = figsize[1]/1.1
+colorarrow = [plt.cm.tab20b.colors[0], plt.cm.tab20b.colors[4], plt.cm.tab20b.colors[16], plt.cm.tab20b.colors[8], plt.cm.tab20b.colors[12]]
+for i in [1,2,3,4,5]:
+    arrowkwargs = {"color": colorarrow[i-1], "zorder":2}
+    gap = 0.07
+    wi = 0.015
+    hl = 0.05
+    le = 0.15
+    plt.arrow(gap/xsize+illustration_dict["z"+str(i)], illustration_dict["x"+str(i)],    le/xsize, 0, width=wi/ysize, head_length=hl/xsize, **arrowkwargs)
+    plt.arrow(-gap/xsize+illustration_dict["z"+str(i)], illustration_dict["x"+str(i)],   -le/xsize, 0, width=wi/ysize, head_length=hl/xsize, **arrowkwargs)
+    if i==1:
+        plt.text(gap/xsize+illustration_dict["z"+str(i)]+le/xsize, illustration_dict["x"+str(i)]-13*wi/ysize, r"$\mathbf{z_"+str(i)+"}$", **arrowkwargs)
+    elif i==5:
+        plt.text(gap/xsize+illustration_dict["z"+str(i)]+le/xsize, illustration_dict["x"+str(i)]+7*wi/ysize, r"$\mathbf{z_"+str(i)+"}$", **arrowkwargs)
+    else:
+        plt.text(gap/xsize+illustration_dict["z"+str(i)]+3*wi/xsize, illustration_dict["x"+str(i)]+9*wi/ysize, r"$\mathbf{[z_"+str(i)+", x_"+str(i)+"]}$", **arrowkwargs)
+    if i > 1 and i < illustration_n+2:
+        plt.arrow(illustration_dict["z"+str(i)], gap/ysize+illustration_dict["x"+str(i)],   0, le/ysize, width=wi/xsize, head_length=hl/ysize, **arrowkwargs)
+        plt.arrow(illustration_dict["z"+str(i)], -gap/ysize+illustration_dict["x"+str(i)], 0, -le/ysize, width=wi/xsize, head_length=hl/ysize, **arrowkwargs)
+
+fig.legend(bbox_to_anchor=[0.95, 0.95], loc="upper right")
+plt.tight_layout()
+plt.savefig("paper_plots/Fig2b_flexknot_illustration_posterior.pdf")
+plt.savefig("paper_plots/Fig2b_flexknot_illustration_posterior.png", dpi=600)
+
+illustration_n = 3
+fig,axes = paramplot(priorSamples, n=illustration_n)
+plt.ylabel("$x_i$ knot coordinates")
+plt.xlabel("$z$ knot coordinates")
+assert illustration_n == 3
+illustration_keys = np.array(["z1","z2","z3","z4","z5","x2","x3","x4"])
+illustration_points = []
+illustration_widths = []
+for k in illustration_keys:
+    illustration_points.append(priorSamples[illustration_n][k].mean())
+    illustration_widths.append(priorSamples[illustration_n][k].std())
+
+illustration_dict = dict(zip(illustration_keys, illustration_points))
+illustration_dict["x1"] = 1
+illustration_dict["x5"] = 0
+d = illustration_dict
+illustration_points = np.array(illustration_points)
+illustration_widths = np.array(illustration_widths)
+zplot=np.linspace(4,31,1000)
+colorline="black"
+plt.plot(zplot, xifunc(zplot, illustration_points, illustration_keys), color=colorline, zorder=1, lw=2)
+scatter_z = [illustration_dict["z"+str(i)] for i in [1,2,3,4,5]]
+scatter_x = [1,*[illustration_dict["x"+str(i)] for i in [2,3,4]],0]
+plt.scatter(scatter_z, scatter_x, color=colorline, zorder=2)
+
+figsize = [5,3]
+fig.set_size_inches(*figsize)
+plt.xlim(4.5,30)
+plt.xticks([5,10,15,20,25,30])
+plt.yticks([0,0.5,1])
+plt.ylim(-0.05,1.02)
+xsize = figsize[0]/25
+ysize = figsize[1]/1.1
+colorarrow = [plt.cm.tab20b.colors[0], plt.cm.tab20b.colors[4], plt.cm.tab20b.colors[16], plt.cm.tab20b.colors[8], plt.cm.tab20b.colors[12]]
+for i in [1,2,3,4,5]:
+    arrowkwargs = {"color": colorarrow[i-1], "zorder":2}
+    gap = 0.07
+    wi = 0.015
+    hl = 0.05
+    le = 0.15
+    plt.arrow(gap/xsize+illustration_dict["z"+str(i)], illustration_dict["x"+str(i)],    le/xsize, 0, width=wi/ysize, head_length=hl/xsize, **arrowkwargs)
+    plt.arrow(-gap/xsize+illustration_dict["z"+str(i)], illustration_dict["x"+str(i)],   -le/xsize, 0, width=wi/ysize, head_length=hl/xsize, **arrowkwargs)
+    if i==1:
+        plt.text(gap/xsize+illustration_dict["z"+str(i)]+1.1*le/xsize, illustration_dict["x"+str(i)]-11*wi/ysize, r"$\mathbf{z_"+str(i)+"}$", **arrowkwargs)
+    elif i==5:
+        plt.text(gap/xsize+illustration_dict["z"+str(i)]+le/xsize, illustration_dict["x"+str(i)]+7*wi/ysize, r"$\mathbf{z_"+str(i)+"}$", **arrowkwargs)
+    else:
+        plt.text(gap/xsize+illustration_dict["z"+str(i)]+3*wi/xsize, illustration_dict["x"+str(i)]+9*wi/ysize, r"$\mathbf{[z_"+str(i)+", x_"+str(i)+"]}$", **arrowkwargs)
+    if i > 1 and i < illustration_n+2:
+        plt.arrow(illustration_dict["z"+str(i)], gap/ysize+illustration_dict["x"+str(i)],   0, le/ysize, width=wi/xsize, head_length=hl/ysize, **arrowkwargs)
+        plt.arrow(illustration_dict["z"+str(i)], -gap/ysize+illustration_dict["x"+str(i)], 0, -le/ysize, width=wi/xsize, head_length=hl/ysize, **arrowkwargs)
+
+fig.legend(bbox_to_anchor=[0.95, 0.95], loc="upper right")
+plt.tight_layout()
+plt.savefig("paper_plots/Fig2a_flexknot_illustration_prior.pdf")
+plt.savefig("paper_plots/Fig2a_flexknot_illustration_prior.png", dpi=600)
+
+
+
+print("=========== Additional checks ===========")
+print("  A) Main triangle plot, for 100 and 1,000 FRBs")
+def plot_main_triangle(planckmnu, planckmnunew_frb3, planckmnunew_frb6, outfilename=None):
+    for c in [planckmnu, planckmnunew_frb3, planckmnunew_frb6]:
+        c.limits["tau"] = [0.04, 0.09]
+        c.limits["Omega_b_H0"] = [3.2, 3.4]
+        c.limits["Omega_m"] = [0.29, 0.33]
+    cosmotriangle = ['tau', 'Omega_b_H0', "Omega_m"]
+    filename = "extra_plots/E_triangle"+outfilename
+    fig, axes = planckmnunew_frb6.plot_2d(cosmotriangle, color=color2, types={'lower':'kde', 'diagonal': 'hist'}, label='1000 FRB', ls='dotted',  bins=50)
+    fig.set_size_inches(8,6)
+    planckmnunew_frb3.plot_2d(axes=axes, color=color1, label='100 FRB', types={'lower':'kde', 'diagonal': 'hist'}, facecolor=None, lw=1.5, bins=50, alpha=1, histtype="step")
+    handles, labels = axes['tau']['Omega_m'].get_legend_handles_labels()
+    handles[1] = mpatches.Patch(edgecolor="black", ls="dashed", label='Planck CMB', facecolor="white")
+    plt.tight_layout()
+    plt.savefig(filename+".pdf")
+    plt.savefig(filename+".png", dpi=600)
+    return fig
+
+plot_main_triangle(planckmnu, chain100, chain1k, outfilename="seed0_"+version)
+
+
+print('  B) Triangle plot, for Planck Omega priors, and larger "5xPlanck" priors to check their influence')
+def plot_planck_check_triangles(planckmnu, x1_pp_f4, x1_5xpp_f4, outfilename=None):
+    for c in [planckmnu, x1_pp_f4, x1_5xpp_f4]:
+        c.limits["tau"] = [0.04, 0.14]
+        c.limits["Omega_b_H0"] = [3, 3.6]
+        c.limits["Omega_m"] = [0.26, 0.37]
+    cosmotriangle = ['tau', 'Omega_b_H0', "Omega_m"]
+    filename = "extra_plots/E_planckcheck_"+outfilename
+    fig, axes = x1_5xpp_f4.plot_2d(cosmotriangle, types={'lower':'kde', 'diagonal': 'hist'}, label='5 times larger Planck Omega prior',  diagonal_kwargs={"bins": 50}, lower_kwargs={"level":[0.68, 0.95]})
+    fig.set_size_inches(8,6)
+    x1_pp_f4.plot_2d(axes=axes, types={'lower':'kde', 'diagonal': 'hist'}, label='Normal Planck Omega prior', diagonal_kwargs={"bins": 50, "histtype":"step"}, lower_kwargs={"level":[0.68, 0.95]})
+    handles, labels = axes["tau"]["Omega_m"].get_legend_handles_labels()
+    fig.legend(handles, labels)
+    plt.savefig(filename+".pdf")
+    plt.savefig(filename+".png", dpi=600)
+    return fig, axes
+
+if load_extra:
+    plot_planck_check_triangles(planckmnu, x1_pp_f4, x1_5xpp_f4, outfilename="seed0_"+version)
+
+
+print("  C) Check how many measurements exceed 68\% confidence")
+if load_extra:
+    for s in [x1_pp_n3_vzend_eprior_etl, x1_pp_n6_vzend_eprior_etl, x1_pp_n3_vzend_eprior_etl_seed2, x1_pp_n6_vzend_eprior_etl_seed2, x1_pp_n3_vzend_eprior_etl_seed3, x1_pp_n6_vzend_eprior_etl_seed3]:
+        for key in ["tau", "z_at_xi0.1", "z_at_xi0.5", "z_at_xi0.9"]:
+            CL3 = fastCL(s['rwMergedChain_'+key], key=key, level=0.68)
+            if CL3[0] < fid[key] and CL3[1] > fid[key]:
+                print("OK")
+            else:
+                print(">68:", CL3, fid[key])
+
+print("  D) Evidence Z as function of number of knots")
+if True:
+    evidences = np.exp(x1_pp_n3_vzend_eprior_etl['logZs']['logZ'])#[0:8]
+    evidences2 = np.exp(x1_pp_n6_vzend_eprior_etl['logZs']['logZ'])#[0:8]
+    norm = np.sum(evidences); evidences = np.array(evidences)/norm
+    norm2 = np.sum(evidences2); evidences2 = np.array(evidences2)/norm2
+    plt.figure(figsize=(5,3))
+    plt.scatter(np.arange(len(evidences))+2, evidences, label='100 FRBs', color="#7963ac")
+    plt.scatter(np.arange(len(evidences))+2, evidences2, label='1,000 FRBs', color="#ff8000")
+    plt.plot(np.arange(len(evidences))+2, evidences, alpha=1, color="#7963ac")
+    plt.plot(np.arange(len(evidences))+2, evidences2, alpha=1, color="#ff8000")
+    plt.ylabel("Relative evidence")
+    plt.xlabel("Model complexity (number of knots)")
+    plt.ylim(0, 0.45)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("extra_plots/E_flexknot_evidences.pdf")
+    plt.savefig("extra_plots/E_flexknot_evidences.png", dpi=600)
+
+print("  E) Histogram of tau for tanh chains vs. true value")
+if True:
+    x1_pp_n3_vzend_eprior_etl_tanh_dz.hist("tau", range=[0.045,0.06], bins=20, label="tanh posterior")
+    plt.xlabel(r"$\tau$")
+    plt.axvline(fid['tau'], label="True (input) value", color="orange")
+    plt.legend()
+    plt.savefig("extra_plots/E_tanh_tau_histogram_100FRBs.png")
+    x1_pp_n6_vzend_eprior_etl_tanh_dz.hist("tau", range=[0.045,0.06], bins=40, label="tanh posterior")
+    plt.xlabel(r"$\tau$")
+    plt.axvline(fid['tau'], label="True (input) value", color="orange")
+    plt.legend()
+    plt.savefig("extra_plots/E_tanh_tau_histogram_1kFRBs.png")
 
