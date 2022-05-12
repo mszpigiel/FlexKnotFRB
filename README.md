@@ -49,17 +49,16 @@ All Figures and Numbers from the paper can be generated using the analysis scrip
 ```bash
 python3 E_analysis.py
 ```
-You can skip generating and fitting new priors, as well as generating the (slow) Figure 1, using options in the file:
+You can skip generating and fitting new priors using options in the file:
 ```python
 # Whether or not to generate new samples from the FlexKnot prior, and make new fits for cancelling the prior effect
-regeneratePriors = True
-regenerateTau = True
-redoFits = True
-# Whether to skip generating the slow and memory-intensive Figure 1
-skipFigure1 = True
+regeneratePriors = False #new prior samples
+regenerateTau = False #recompute tau for prior samples
+redoFits = False #redo prior distribution fits
 ```
+Running the script should take about 5-10 minutes, assuming you are using the data from our [zenodo record](https://zenodo.org/record/5504050).
 
-The NestedSampling data will be available soon (planned today), please don't hesitate to contact me if I have not uploaded it yet or if you have any trouble.
+That [zenodo record](https://zenodo.org/record/5504050) contains the NestedSampling chains as well as the pre-computed plotting data and fits (`cache` folder).
 
 Note: The numbers here differ slightly from the initial arXiv version (will be updated with final version) mainly due to 2 reasons:
 1. We now use the conventional definition of confidence intervals (or, more precisely, credibility intervals) defined with iso-probability boundaries, and we quote the maximum posterior probability points instead of mean values.
