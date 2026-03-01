@@ -12,3 +12,12 @@ __pycache__/
 extra_plots/
 *.png
 *.pdf
+
+# ---- generated chains / caches (do not version) ----
+chains/
+cache/
+*.resume
+*.txt
+*.hdf
+*.h5
+*.hdf5
