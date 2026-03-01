@@ -54,7 +54,7 @@ regenerateTau = False #recompute tau for prior samples
 redoFits = False #redo prior distribution fits
 
 # Number of prior samples
-Nprior = int(1e6)
+Nprior = int(1e5)
 # Option to skip slow and memory-intensive Figure 1
 Fig1_skip = False
 # Option to run a low-resolution version instead

@@ -1,5 +1,7 @@
 # FlexKnotFRB
 
+Note: This is the code as of 12th of May, 2022. An up to date version can be found here: https://github.com/Stefan-Heimersheim/FlexKnotFRB
+
 These are the codes used for our paper "What it takes to measure reionization with fast radio bursts". If you would like to use any of these methods please feel free to contact me for more details and explanations, my email address can be found [here](https://www.ast.cam.ac.uk/people/Stefan.Heimersheim) or you can just open an issue on here GitHub :)
 
 ## Generation of the synthetic data set
