@@ -3,3 +3,9 @@ cache/
 chains/
 data/
 paper_plots/
+
+# local venv
+frbenv/
+__pycache__/
+*.pyc
+.DS_Store

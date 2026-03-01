@@ -1,0 +1,22 @@
+anesthetic @ git+https://github.com/williamjameshandley/anesthetic@5430098069d2fd4d33e0a0689a55b42563ad8f71
+astropy==5.0.4
+cycler==0.11.0
+fgivenx @ git+https://github.com/williamjameshandley/fgivenx@e1dc023b712d5b59c4f24613982877af90871806
+fonttools==4.33.3
+kiwisolver==1.4.2
+matplotlib==3.5.2
+numexpr==2.8.1
+numpy==1.22.3
+packaging==21.3
+pandas==1.4.2
+Pillow==9.1.0
+pyerfa==2.0.0.1
+pyparsing==3.0.8
+python-dateutil==2.8.2
+pytz==2022.1
+PyYAML==6.0
+scipy==1.8.0
+seaborn==0.11.2
+six==1.16.0
+tables==3.7.0
+tqdm==4.64.0
