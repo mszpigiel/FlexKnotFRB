@@ -1,0 +1,3 @@
+[submodule "FlexKnotFRB"]
+	path = FlexKnotFRB
+	url = https://github.com/mszpigiel/FlexKnotFRB.git
