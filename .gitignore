@@ -9,3 +9,6 @@ frbenv/
 __pycache__/
 *.pyc
 .DS_Store
+extra_plots/
+*.png
+*.pdf
