@@ -21,3 +21,6 @@ cache/
 *.hdf
 *.h5
 *.hdf5
+# Generated outputs (do not commit)
+chains/
+cache/
